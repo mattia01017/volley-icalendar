@@ -1,2 +1,2 @@
 # volley-icalendar
-iCalendar generator from FIPAV volleyball calendars
+iCalendar generator from FIPAV volleyball calendars (WIP)
