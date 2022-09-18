@@ -26,9 +26,8 @@ class Tournament:
         return calendar
 
     def get_teams(self) -> list[str]:
-        if self._teams is None:
-            self._teams = list(
-                set(self.rounds[0].get_teams() + self.rounds[1].get_teams()))
+        self._teams = list(
+            set(self.rounds[0].get_teams() + self.rounds[1].get_teams()))
         return self._teams
 
     def __str__(self) -> str:
@@ -39,6 +38,11 @@ class Tournament:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def remove_other_teams(self, team_names: list) -> None:
+        for r in self.rounds:
+            r._remove_other_teams(team_names)
+            
 
 
 class Round:
@@ -55,6 +59,9 @@ class Round:
                 [m.guest_team for m in self.matches]
             self._teams = list(set(teams))
         return self._teams
+
+    def _remove_other_teams(self,team_names: list) -> None:
+        self.matches = [m for m in self.matches if True in list(map(m.has_team, team_names))]
 
     def __str__(self) -> str:
         string = "ROUND\n"

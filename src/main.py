@@ -25,6 +25,8 @@ def get_options():
     elif opts.split and len(opts.output) != 1 and len(opts.output) != len(opts.urls):
         parser.error("--split option specified, you can specify only one name or the same number as the URLs.\n" +
                      f"{len(opts.output)} name(s) given, {len(opts.urls)} URL(s) given")
+    elif opts.split and len(opts.urls) == 1:
+        parser.error("--split option can't be used with just 1 URL given")
     return opts
 
 
@@ -36,30 +38,48 @@ async def fetch_and_soup(url) -> BeautifulSoup:
 async def create_ical_file(tournament: Tournament, filename: str) -> None:
     with open(filename, 'wb') as f:
         out = tournament.icalendar().to_ical()
-        f.write(out.replace("\\", ""))
+        f.write(out)
 
 
 async def main():
     opts = get_options()
-    print("Loading...")
+    print("Loading resources...")
     coros = await asyncio.wait(
         [fetch_and_soup(url) for url in opts.urls]
     )
+    print("Parsing matches...")
     soups = [c.result() for c in coros[0]]
     tournaments = [Tournament(s) for s in soups]
+    
+    if not opts.all:
+        for tournament in tournaments:
+            print(f"Title: {tournament.title}")
+            index = 1
+            teams = tournament.get_teams()
+            for t in teams:
+                print(f"{index}.\t{t}")
+                index += 1
+            fav_teams_index = input(
+                "select teams to add to calendar: ").split()
+            to_keep = [teams[i]
+                       for i in range(0, index-1) 
+                       if str(i+1) in fav_teams_index]
+            tournament.remove_other_teams(to_keep)
+            print()
 
-    if opts.all:
-        print("Saving...")
-        if len(opts.output) > 1:
-            await asyncio.wait(
-                [create_ical_file(tournaments[i], opts.output[i])
-                 for i in range(0, len(tournaments))]
-            )
-        else:
-            with open(opts.output[0], "ab") as f:
-                for t in tournaments:
-                    f.write(t.icalendar().to_ical())
+    print("Saving calendars...")
+    filenames = opts.output
+    if opts.split:
+        if len(filenames) == 1:
+            filenames = [f"{t.title}_{filenames[0]}" for t in tournaments]
+        await asyncio.wait(
+            [create_ical_file(tournaments[i], filenames[i])
+                for i in range(0, len(tournaments))]
+        )
     else:
-        pass
+        with open(filenames[0], 'w') as f:
+            f.flush()
+        with open(filenames[0], "ab") as f:
+            for tournament in tournaments:
+                f.write(tournament.icalendar().to_ical())
     print("Done")
-        
