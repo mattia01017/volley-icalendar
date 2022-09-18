@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import pytz
 from parse import parse
 from bs4 import BeautifulSoup
 import icalendar
@@ -15,14 +16,18 @@ class Tournament:
         self._teams = None
 
     def icalendar(self) -> icalendar.Calendar:
-        calendar = icalendar.Calendar()
-        for m in self.matches:
-            calendar.add_component(m.icalendar_event())
+        calendar = icalendar.Calendar({
+            'prodid': '-//My calendar product//mxm.dk//',
+            'version': '2.0'
+        })
+        for r in self.rounds:
+            for m in r.matches:
+                calendar.add_component(m.icalendar_event())
         return calendar
 
     def get_teams(self) -> list[str]:
-        if self._teams is None:
-            self._teams = list(set(self.rounds[0].get_teams() + self.rounds[1].get_teams()))
+        self._teams = list(
+            set(self.rounds[0].get_teams() + self.rounds[1].get_teams()))
         return self._teams
 
     def __str__(self) -> str:
@@ -33,6 +38,11 @@ class Tournament:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def remove_other_teams(self, team_names: list) -> None:
+        for r in self.rounds:
+            r._remove_other_teams(team_names)
+            
 
 
 class Round:
@@ -50,6 +60,9 @@ class Round:
             self._teams = list(set(teams))
         return self._teams
 
+    def _remove_other_teams(self,team_names: list) -> None:
+        self.matches = [m for m in self.matches if True in list(map(m.has_team, team_names))]
+
     def __str__(self) -> str:
         string = "ROUND\n"
         string += f"ID: {self.id}\n"
@@ -62,13 +75,13 @@ class Round:
 
 
 class Match:
-    match_duration = timedelta(hours=1)
+    duration = timedelta(hours=1)
 
     def __init__(self, match_soup: BeautifulSoup, round: Round):
         strDate = match_soup.find(class_="info-gara-data").string
         dl = parse('{} {}/{}/{} {}.{}', strDate)
         self.date = datetime(int(dl[3]), int(
-            dl[2]), int(dl[1]), int(dl[4]), int(dl[5]))
+            dl[2]), int(dl[1]), int(dl[4]), int(dl[5]), 0, tzinfo=pytz.timezone('Europe/Rome'))
         self.num = match_soup.find(class_="info-gara-giornata").string
         self.address = match_soup.find(class_="info-gara-campo-desc").string + ", " + \
             match_soup.find(class_="info-gara-campo-loc").string
@@ -86,11 +99,11 @@ class Match:
     def icalendar_event(self) -> icalendar.Event:
         event = icalendar.Event({
             'summary': self.host_team + " VS " + self.guest_team,
-            'dtstart': self.date,
-            'dtend': self.date + Match.match_duration,
             'location': self.address,
-            'description': self.tournament.title + ", " + self.num
+            'description': self.round.tournament.title + ", " + self.num
         })
+        event.add('dtstart', self.date)
+        event.add('dtend', self.date + Match.duration)
         return event
 
     def __str__(self) -> str:
