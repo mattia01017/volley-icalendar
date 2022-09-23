@@ -31,8 +31,18 @@ def get_options():
 
 
 async def fetch_and_soup(url) -> BeautifulSoup:
-    res = requests.get(url).content
-    return BeautifulSoup(res, "html.parser")
+    if not "https://www.fipavonline.it/main/gare_girone/" in url:
+        print(f"{url} isn't a valid tournament page")
+        return
+    try:
+        res = requests.get(url)
+    except Exception as e:
+        print(f"An error occurred during the request: {e}")
+        return
+    if res.status_code != 200:
+        print(f"Something went wrong during the request. HTTP error code: {res.status_code}")
+        return
+    return BeautifulSoup(res.content, "html.parser")
 
 
 async def create_ical_file(tournament: Tournament, filename: str) -> None:
@@ -47,8 +57,10 @@ async def main():
     coros = await asyncio.wait(
         [fetch_and_soup(url) for url in opts.urls]
     )
-    print("Parsing matches...")
     soups = [c.result() for c in coros[0]]
+    if None in soups:
+        quit(1)
+    print("Parsing matches...")
     tournaments = [Tournament(s) for s in soups]
     
     if not opts.all:
